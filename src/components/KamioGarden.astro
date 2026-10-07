@@ -1,0 +1,233 @@
+---
+import '@fontsource-variable/inter';
+---
+
+<main class="home">
+	<div class="cube-helix" aria-hidden="true"></div>
+	<div class="wordmark">
+		<h1>kamio.studio</h1>
+		<p>identidad gráfica &amp; dirección de arte</p>
+	</div>
+</main>
+
+<style>
+	.home {
+		isolation: isolate;
+		overflow: hidden;
+		position: relative;
+		display: grid;
+		min-height: 100svh;
+		place-items: center;
+		padding: 2rem;
+		background: #f2e8e0;
+		color: #5a2818;
+	}
+
+	.cube-helix {
+		inset: 0;
+		pointer-events: none;
+		position: absolute;
+		z-index: -1;
+	}
+
+	:global(.cube-helix-canvas) {
+		display: block;
+		height: 100%;
+		width: 100%;
+	}
+
+	.wordmark {
+		position: relative;
+		z-index: 1;
+		text-align: center;
+	}
+
+	h1,
+	p {
+		color: #27110a;
+		margin: 0;
+	}
+
+	h1 {
+		font-family: 'Inter Variable', Arial, sans-serif;
+		font-size: clamp(3.5rem, 12vw, 12rem);
+		font-weight: 500;
+		letter-spacing: -.06em;
+		line-height: .9;
+	}
+
+	p {
+		display: inline-block;
+		margin-top: clamp(1rem, 2vw, 2rem);
+		padding: .585em .945em .63em;
+		border-radius: 999px;
+		background: #f2e8e0;
+		font-family: 'Inter Variable', Arial, sans-serif;
+		font-size: clamp(.9rem, 1.35vw, 1.215rem);
+		font-weight: 400;
+		letter-spacing: .02em;
+		line-height: 1;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.cube-helix {
+			display: none;
+		}
+	}
+
+	@media (max-width: 700px) {
+		:global(html),
+		:global(body) {
+			overflow: hidden;
+			overscroll-behavior: none;
+		}
+
+		.home {
+			height: 100svh;
+			min-height: 100svh;
+			padding: 1.5rem;
+			touch-action: none;
+		}
+
+		.wordmark {
+			width: min(100%, 28rem);
+		}
+
+		h1 {
+			font-size: clamp(3.15rem, 15vw, 5.25rem);
+		}
+
+		p {
+			max-width: 100%;
+			font-size: clamp(.78rem, 3.45vw, .98rem);
+		}
+	}
+</style>
+
+<script>
+	import * as THREE from 'three';
+
+	const home = document.querySelector<HTMLElement>('.home');
+	const canvasMount = document.querySelector<HTMLElement>('.cube-helix');
+	const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+	if (home && canvasMount && !reducedMotion) {
+		const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+		renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+		renderer.domElement.className = 'cube-helix-canvas';
+		canvasMount.append(renderer.domElement);
+		renderer.setClearColor(0x000000, 0);
+
+		const camera = new THREE.PerspectiveCamera(42, 1, .1, 100);
+		camera.position.z = 23;
+		const scene = new THREE.Scene();
+		const helix = new THREE.Group();
+		const pointer = new THREE.Vector2();
+		const pointerTarget = new THREE.Vector2();
+		const cubeCount = 76;
+		const edgeGeometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(.72, .72, .72));
+		const edgeMaterial = new THREE.LineBasicMaterial({
+			color: 0x5a2818,
+			transparent: true,
+			opacity: .32,
+		});
+		const cubes = Array.from({ length: cubeCount }, (_, index) => {
+			const cube = new THREE.LineSegments(edgeGeometry, edgeMaterial);
+			const progress = index / (cubeCount - 1);
+			const phase = progress * Math.PI * 6;
+			const base = new THREE.Vector3(
+				Math.cos(phase) * 1.15,
+				(progress - .5) * 12.5,
+				Math.sin(phase) * 1.15,
+			);
+			const helixPosition = new THREE.Vector3(
+				Math.cos(phase) * 3.4,
+				(progress - .5) * 12.5,
+				Math.sin(phase) * 3.4,
+			);
+
+			cube.userData = {
+				base,
+				helixPosition,
+				baseRotation: new THREE.Euler(0, 0, progress * Math.PI * .2),
+				helixRotation: new THREE.Euler(phase * .3, phase * .18, phase * .12),
+				phase,
+				spread: .45 + (Math.sin(index * 47.31) * .5 + .5),
+			};
+			helix.add(cube);
+			return cube;
+		});
+
+		scene.add(helix);
+
+		const applyState = (cycle: number, seconds: number) => {
+			const viewHeight = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.position.z;
+			const cursorX = pointer.x * viewHeight * camera.aspect * .5;
+			const cursorY = pointer.y * viewHeight * .5;
+
+			cubes.forEach((cube) => {
+				const { base, helixPosition, baseRotation, helixRotation, phase, spread } = cube.userData;
+				const breathing = Math.sin(seconds * 1.4 + phase * 1.5) * .14;
+				const travellingWave = Math.sin(seconds * 2.1 - phase * 1.25) * .16;
+				const dispersion = (
+					Math.sin(seconds * .63 + phase * 1.7) * .72
+					+ Math.sin(seconds * 1.17 - phase * .55) * .32
+				) * spread * cycle;
+				cube.position.lerpVectors(base, helixPosition, cycle);
+				cube.position.x += Math.cos(phase) * dispersion;
+				cube.position.y += Math.sin(seconds * .82 + phase * 2.4) * spread * .16;
+				cube.position.z += Math.sin(phase) * dispersion;
+
+				const deltaX = cube.position.x - cursorX;
+				const deltaY = cube.position.y - cursorY;
+				const cursorDistance = Math.hypot(deltaX, deltaY);
+				const cursorInfluence = Math.exp(-(cursorDistance * cursorDistance) / 12);
+				const directionX = deltaX / (cursorDistance + .001);
+				const directionY = deltaY / (cursorDistance + .001);
+
+				cube.position.x += directionX * cursorInfluence * .42;
+				cube.position.y += directionY * cursorInfluence * .42;
+				cube.position.z += breathing + travellingWave + cursorInfluence * 1.45;
+				cube.scale.setScalar(1 + cursorInfluence * .32);
+				cube.rotation.set(
+					THREE.MathUtils.lerp(baseRotation.x, helixRotation.x, cycle) + cursorInfluence * .45,
+					THREE.MathUtils.lerp(baseRotation.y, helixRotation.y, cycle) + travellingWave,
+					THREE.MathUtils.lerp(baseRotation.z, helixRotation.z, cycle) + cursorInfluence * .3,
+				);
+			});
+		};
+
+		const resize = () => {
+			const { width, height } = home.getBoundingClientRect();
+			renderer.setSize(width, height, false);
+			camera.aspect = width / height;
+			camera.updateProjectionMatrix();
+			helix.scale.setScalar(width <= 700 ? 1.08 : Math.min(1, camera.aspect * 1.15));
+		};
+
+		const move = (event: PointerEvent) => {
+			const bounds = home.getBoundingClientRect();
+			pointerTarget.set(
+				((event.clientX - bounds.left) / bounds.width - .5) * 2,
+				(1 - (event.clientY - bounds.top) / bounds.height - .5) * 2,
+			);
+		};
+
+		const start = performance.now();
+		const animate = (now: number) => {
+			const seconds = (now - start) / 1000;
+			const cycle = .5 - .5 * Math.cos(seconds * .28);
+			pointer.lerp(pointerTarget, .035);
+			helix.rotation.y = seconds * .18;
+			helix.rotation.x = 0;
+			applyState(cycle, seconds);
+			renderer.render(scene, camera);
+			requestAnimationFrame(animate);
+		};
+
+		resize();
+		window.addEventListener('resize', resize);
+		home.addEventListener('pointermove', move);
+		requestAnimationFrame(animate);
+	}
+</script>
